@@ -1,0 +1,4 @@
+. parallelize mult_matrix2 on 2 cpus
+. bignum library
+. adjust grain
+. split per block
