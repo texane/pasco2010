@@ -1,7 +1,42 @@
+/*
+** Made by fabien le mentec <texane@gmail.com>
+** 
+** Started on  Sat Jul 10 09:21:21 2010 texane
+** Last update Sat Jul 10 10:00:32 2010 texane
+*/
+
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_blas.h>
+
+
+#define CONFIG_USE_AFFINITY 1
+#define CONFIG_USE_TICK 1
+
+
+#if CONFIG_USE_TICK
+#include "tick.h"
+#endif
+
+
+#if CONFIG_USE_AFFINITY
+
+#include <unistd.h>
+#define __USE_GNU 1
+#include <sched.h>
+
+static void set_cpu_affinity(unsigned int icpu)
+{
+  cpu_set_t cpuset;
+
+  CPU_ZERO(&cpuset);
+  CPU_SET(icpu, &cpuset);
+  sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
+}
+
+#endif
 
 
 static gsl_matrix* create_matrix_with_data
@@ -18,14 +53,14 @@ static gsl_matrix* create_matrix_with_data
 }
 
 
-static void mult_matrix2
+static void mult_matrix0
 (gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
 {
   gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.f, lhs, rhs, 0.f, res);
 }
 
 
-static void mult_matrix
+static void mult_matrix1
 (gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
 {
   size_t i, j, k;
@@ -125,7 +160,7 @@ static int next_seq_work(work_t* seq_work, work_t* par_work)
   return 0;
 }
 
-static void mult_matrix3
+static void mult_matrix2
 (gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
 {
   work_t par_work;
@@ -184,6 +219,44 @@ static void print_matrix(const gsl_matrix* m)
 }
 
 
+static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+{
+  void (*f)(gsl_matrix*, gsl_matrix*, gsl_matrix*) = NULL;
+
+#if CONFIG_USE_TICK
+  tick_counter_t ticks[3];
+#endif
+
+#define CASE_TO_F(__f, __n) case __n: __f = mult_matrix ## __n; break
+  switch (n)
+  {
+    CASE_TO_F(f, 0);
+    CASE_TO_F(f, 1);
+    CASE_TO_F(f, 2);
+  }
+
+  gsl_matrix_set_zero(res);
+
+#if CONFIG_USE_TICK
+  tick_read(&ticks[0]);
+#endif
+
+  f(res, lhs, rhs);
+
+#if CONFIG_USE_TICK
+  tick_read(&ticks[1]);
+#endif
+
+#if CONFIG_USE_TICK
+  tick_sub(&ticks[2], &ticks[1], &ticks[0]);
+  printf("ticks: %llu\n", ticks[2].value);
+#endif
+
+  print_matrix(res);
+  printf("---\n");
+}
+
+
 int main(int ac, char** av)
 {
   static const double lhs_data[] =
@@ -196,20 +269,13 @@ int main(int ac, char** av)
   gsl_matrix* rhs_matrix = create_matrix_with_data((const double*)rhs_data, 2, 2);
   gsl_matrix* res_matrix = gsl_matrix_alloc(2, 2);
 
-  gsl_matrix_set_zero(res_matrix);
-  mult_matrix2(res_matrix, lhs_matrix, rhs_matrix);
-  print_matrix(res_matrix);
-  printf("---\n");
+#if CONFIG_USE_AFFINITY
+  set_cpu_affinity(1);
+#endif
 
-  gsl_matrix_set_zero(res_matrix);
-  mult_matrix(res_matrix, lhs_matrix, rhs_matrix);
-  print_matrix(res_matrix);
-  printf("---\n");
-
-  gsl_matrix_set_zero(res_matrix);
-  mult_matrix3(res_matrix, lhs_matrix, rhs_matrix);
-  print_matrix(res_matrix);
-  printf("---\n");
+  mult_switch(0, res_matrix, lhs_matrix, rhs_matrix);
+  mult_switch(1, res_matrix, lhs_matrix, rhs_matrix);
+  mult_switch(2, res_matrix, lhs_matrix, rhs_matrix);
 
   gsl_matrix_free(lhs_matrix);
   gsl_matrix_free(rhs_matrix);
