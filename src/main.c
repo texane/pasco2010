@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Sat Jul 10 09:21:21 2010 texane
-** Last update Sat Jul 10 10:00:32 2010 texane
+** Last update Sat Jul 10 16:51:50 2010 texane
 */
 
 
@@ -53,12 +53,16 @@ static gsl_matrix* create_matrix_with_data
 }
 
 
+/* blas version */
+
 static void mult_matrix0
 (gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
 {
   gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.f, lhs, rhs, 0.f, res);
 }
 
+
+/* sequential handwritten version */
 
 static void mult_matrix1
 (gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
@@ -88,6 +92,9 @@ typedef struct range
 
 typedef struct work
 {
+  volatile long lock; /* aligned */
+
+  /* res = lhs * rhs */
   gsl_matrix* res;
   gsl_matrix* lhs;
   gsl_matrix* rhs;
@@ -97,14 +104,26 @@ typedef struct work
 } work_t;
 
 
-static void res_to_range(gsl_matrix* res, range_t* range)
+static inline void lock_work(work_t* w)
+{
+  while (__sync_lock_test_and_set(&w->lock, 0))
+    ;
+}
+
+static inline void unlock_work(work_t* w)
+{
+  __sync_lock_release(&w->lock);
+}
+
+
+static inline void res_to_range(gsl_matrix* res, range_t* range)
 {
   range->i = 0;
   range->j = res->size1 * res->size2;
 }
 
 
-static void index_to_res
+static inline void index_to_res
 (const gsl_matrix* res, unsigned int index, unsigned int* i, unsigned int* j)
 {
   /* flat index into res ij pos */
@@ -131,6 +150,8 @@ static void range_to_res
 static void prepare_par_work
 (work_t* par_work, gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
 {
+  par_work->lock = 0;
+
   par_work->res = res;
   res_to_range(res, &par_work->range);
 
@@ -170,9 +191,17 @@ static void mult_matrix2
   prepare_seq_work(&seq_work, &par_work);
 
   /* extract sequential work */
-  while (next_seq_work(&seq_work, &par_work) != -1)
+  while (1)
   {
     unsigned int n;
+    int res;
+
+    lock_work(&par_work);
+    res = next_seq_work(&seq_work, &par_work);
+    unlock_work(&par_work);
+
+    if (res == -1)
+      break ;
 
     /* foreach n, compute res[index(n)] */
     for (n = seq_work.range.i; n < seq_work.range.j; ++n)
@@ -198,6 +227,8 @@ static void mult_matrix2
 }
 
 
+/* print helpers */
+
 static inline void print_double(double value)
 {
   if (value >= 0.f)
@@ -218,6 +249,8 @@ static void print_matrix(const gsl_matrix* m)
   }
 }
 
+
+/* select the implementation to run */
 
 static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
 {
@@ -256,6 +289,8 @@ static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_ma
   printf("---\n");
 }
 
+
+/* main */
 
 int main(int ac, char** av)
 {
