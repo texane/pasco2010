@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Sat Jul 10 09:21:21 2010 texane
-** Last update Sat Jul 10 16:51:50 2010 texane
+** Last update Sun Jul 11 06:58:33 2010 texane
 */
 
 
@@ -82,12 +82,14 @@ static void mult_matrix1
 }
 
 
-/* parallel version */
+/* xkaapi parallel version */
+
+#include "kaapi.h"
 
 typedef struct range
 {
-  size_t i;
-  size_t j;
+  unsigned int i;
+  unsigned int j;
 } range_t;
 
 typedef struct work
@@ -101,7 +103,9 @@ typedef struct work
 
   /* remaining indices to compute */
   range_t range;
-} work_t;
+
+  kaapi_stealcontext_t* master_sc;
+} work_t __attribute__((aligned(64)));
 
 
 static inline void lock_work(work_t* w)
@@ -113,6 +117,12 @@ static inline void lock_work(work_t* w)
 static inline void unlock_work(work_t* w)
 {
   __sync_lock_release(&w->lock);
+}
+
+
+static inline unsigned int get_range_size(const range_t* range)
+{
+  return range->j - range->i;
 }
 
 
@@ -148,7 +158,9 @@ static void range_to_res
 
 
 static void prepare_par_work
-(work_t* par_work, gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+(work_t* par_work, gsl_matrix* res,
+ gsl_matrix* lhs, gsl_matrix* rhs,
+ kaapi_stealcontext_t* master_sc)
 {
   par_work->lock = 0;
 
@@ -157,6 +169,8 @@ static void prepare_par_work
 
   par_work->lhs = lhs;
   par_work->rhs = rhs;
+
+  par_work->master_sc = master_sc;
 }
 
 static void prepare_seq_work(work_t* seq_work, work_t* par_work)
@@ -168,37 +182,160 @@ static void prepare_seq_work(work_t* seq_work, work_t* par_work)
 
 static int next_seq_work(work_t* seq_work, work_t* par_work)
 {
-  /* extract the next work */
+  /* extract sequential work */
 
-  if (!(par_work->range.j - par_work->range.i))
+#define SEQ_SIZE 1
+
+  const unsigned int range_size = get_range_size(&seq_work->range);
+  const unsigned int seq_size = range_size < SEQ_SIZE ? range_size : SEQ_SIZE;
+
+  if (!seq_size)
     return -1;
 
   seq_work->range.i = par_work->range.i;
-  seq_work->range.j = par_work->range.i + 1;
-
-  ++par_work->range.i;
+  seq_work->range.j = par_work->range.i + seq_size;
+  par_work->range.i += seq_size;
 
   return 0;
 }
 
-static void mult_matrix2
-(gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+static inline void steal_range
+(range_t* stolen_range, unsigned int steal_size, range_t* victim_range)
 {
-  work_t par_work;
+  stolen_range->j = victim_range->j;
+  stolen_range->i = victim_range->j - steal_size;
+  victim_range->j -= steal_size;
+}
+
+static int reduce_function
+(kaapi_stealcontext_t* sc, void* targ, void* tptr, size_t tsize, void* vptr)
+{
+  work_t* const vwork = (work_t*)vptr;
+  work_t* const twork = (work_t*)tptr;
+
+  lock_work(vwork);
+  vwork->range.i = twork.range.i;
+  vwork->range.j = twork.range.j;
+  kaapi_set_self_workload(get_range_size(&vwork->range));
+  unlock_work(vwork);
+
+  return 0; /* false, continue */
+}
+
+
+static int split_function
+(kaapi_stealcontext_t* sc, int request_count,
+ kaapi_request_t* request, void* arg)
+{
+  work_t* const vwork = (work_t*)arg;
+  range_t stolen_range;
+
+  /* steal a balanced part of the victim range */
+  unsigned int has_stolen = 0;
+  lock_work(vwork);
+
+  /* compute unit size */
+  const unsigned int total_size = get_range_size(&vwork->range);
+  size_t unit_size = 0;
+
+  if (total_size == 0)
+    goto dont_steal;
+
+#define PAR_SIZE 1
+  unit_size = size / (request_count + 1);
+  if (unit_size < PAR_SIZE)
+  {
+    request_count = (seq_size / PAR_SIZE) - 1;
+    if (request_count <= 0)
+      goto dont_steal;
+    unit_size = PAR_SIZE;
+  }
+
+  /* steal the range */
+  const size_t steal_size = unit_size * (size_t)request_count;
+  steal_range(&stolen_range, steal_size, &vwork->range);
+
+  /* update victim workload */
+  kaapi_set_workload
+    (kaapi_stealcontext_kproc(sc), get_range_size(&vwork->range));
+
+  has_stolen = 1;
+
+ dont_steal:
+  unlock_work(vwork);
+
+  if (!has_stolen)
+    return 0;
+
+  /* stolen_range now contains the work to distribute */
+
+  range_type r;
+  if (vc->_seq.steal(r, steal_size) == false)
+    return 0;
+
+  /* reply requests */
+
+  int reply_count = 0;
+
+  for (; request_count > 0; ++request)
+  {
+    if (!kaapi_request_ok(request))
+      continue;
+
+    /* pop no more than unit_size */
+    if (unit_size > (unsigned int)get_range_size(&stolen_range))
+      unit_size = get_range_size(&stolen_range);
+
+    kaapi_thread_t* thief_thread = kaapi_request_getthread(request);
+    kaapi_task_t* thief_task = kaapi_thread_toptask(thief_thread);
+
+    /* allocate task stack */
+    work_t* twork = (work_t*)
+      (kaapi_thread_pushdata_align(thief_thread, sizeof(work_t), 8));
+
+    /* allocate task result */
+    kaapi_taskadaptive_result_t* const ktr =
+      kaapi_allocate_thief_result(sc, sizeof(work_t), NULL);
+
+    /* initialize task stack */
+    prepare_par_work(twork, vwork->res, vwork->lhs, vwork->rhs, sc);
+
+    kaapi_task_init(thief_task, task_entry, twork);
+    kaapi_thread_pushtask(thief_thread);
+    kaapi_request_reply_head(sc, request, ktr);
+
+    kaapi_set_workload(kaapi_request_kproc(request), unit_size);
+
+    pos += unit_size;
+
+    --request_count;
+    ++reply_count;
+  }
+
+  return reply_count;
+} /* split_function */
+
+
+static void task_entry(void* arg, kaapi_thread_t* thread)
+{
+  work_t* const par_work = (work_t*)arg;
   work_t seq_work;
 
-  prepare_par_work(&par_work, res, lhs, rhs);
-  prepare_seq_work(&seq_work, &par_work);
+  /* push the adaptive task */
+  kaapi_stealcontext_t* const sc = kaapi_thread_pushstealcontext
+    (thread, KAAPI_STEALCONTEXT_DEFAULT, split_function,
+     arg, par_work->_master_sc);
 
   /* extract sequential work */
+ redo_work:
   while (1)
   {
     unsigned int n;
     int res;
 
-    lock_work(&par_work);
-    res = next_seq_work(&seq_work, &par_work);
-    unlock_work(&par_work);
+    lock_work(par_work);
+    res = next_seq_work(&seq_work, par_work);
+    unlock_work(par_work);
 
     if (res == -1)
       break ;
@@ -223,7 +360,45 @@ static void mult_matrix2
 
       gsl_matrix_set(seq_work.res, i, j, res);
     }
+
+    /* check for preemption */
+    const int is_preempted = kaapi_preemptpoint
+      (ktr, sc, NULL, NULL, par_work, sizeof(work_t), NULL);
+    if (is_preempted)
+      return ;
   }
+
+  /* thief preemption */
+  kaapi_taskadaptive_result_t* const ktr = kaapi_get_thief_head(sc);
+  if (ktr != NULL)
+  {
+    kaapi_preempt_thief(sc, ktr, NULL, reduce_function, par_work);
+    goto redo_work;
+  }
+
+  kaapi_steal_finalize(sc);
+}
+
+static void mult_matrix2
+(gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+{
+  work_t par_work;
+  kaapi_thread_t* thread;
+  kaapi_task_t* task;
+  kaapi_frame_t frame;
+
+  prepare_par_work(&par_work, res, lhs, rhs, NULL);
+
+  /* create and run main task */
+  kaapi_set_self_workload(get_range_size(&par_work.range));
+  thread = kaapi_self_thread();
+  kaapi_thread_save_frame(thread, &frame);
+  task = kaapi_thread_toptask(thread);
+  kaapi_task_init(task, task_entry, &par_work);
+  kaapi_thread_pushtask(thread);
+  kaapi_sched_sync();
+  kaapi_thread_restore_frame(thread, &frame);
+  kaapi_set_self_workload(0);
 }
 
 
