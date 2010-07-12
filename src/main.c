@@ -21,9 +21,9 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 2
+#define CONFIG_ITER_COUNT 1
 
-#define CONFIG_DO_CHECK 1
+#define CONFIG_DO_CHECK 0
 
 
 #if CONFIG_USE_TICK
