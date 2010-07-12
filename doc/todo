@@ -1,10 +1,11 @@
-. parallelize mult_matrix2 on 2 cpus
- . finish xkaapi implementation
 . bignum library
 . find big matrices to test
 . adjust grains
 . split per block
 
+. matrix.c
+ . line should not be reallocated each time
+ . check write return vals
 
 . optims
  . use ktr to allocate data and kaapi_preeemptpoint

@@ -8,16 +8,13 @@
 
 #include <stdio.h>
 #include <sys/types.h>
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_blas.h>
 #include "kaapi.h"
+#include "matrix.h"
 
 
 #define CONFIG_USE_TICK 1
 #define CONFIG_USE_WORKLOAD 1
 #define CONFIG_USE_DEBUG 0
-
-#define CONFIG_ADD_SEQLOAD 0
 
 #define CONFIG_PAR_SIZE 1
 #define CONFIG_SEQ_SIZE 1
@@ -32,17 +29,6 @@
 #endif
 
 
-#if CONFIG_ADD_SEQLOAD
-#include <unistd.h>
-
-static void add_seq_load(void)
-{
-  usleep(10000);
-}
-
-#endif
-
-
 #if CONFIG_USE_WORKLOAD
 extern void kaapi_set_workload(struct kaapi_processor_t*, kaapi_uint32_t);
 extern void kaapi_set_self_workload(kaapi_uint32_t);
@@ -52,33 +38,10 @@ extern unsigned int kaapi_request_kid(kaapi_request_t*);
 #endif
 
 
-static gsl_matrix* create_matrix_with_data
-(const double* data, size_t nrow, size_t ncol)
-{
-  gsl_matrix* const m = gsl_matrix_alloc(nrow, ncol);
-  size_t i, j;
-
-  for (i = 0; i < nrow; ++i)
-    for (j = 0; j < ncol; ++j)
-      gsl_matrix_set(m, i, j, data[i * ncol + j]);
-
-  return m;
-}
-
-
-/* blas version */
-
-static void mult_matrix0
-(gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
-{
-  gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1.f, lhs, rhs, 0.f, res);
-}
-
-
 /* sequential handwritten version */
 
-static void mult_matrix1
-(gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+static void mul_matrix0
+(matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
   size_t i, j, k;
 
@@ -86,10 +49,24 @@ static void mult_matrix1
   {
     for (j = 0; j < lhs->size2; ++j)
     {
-      double t = 0.f;
+      /* e = 0; */
+      matrix_elem_t* const e = matrix_at(res, i, j);
+      matrix_elem_init(e);
+
       for (k = 0; k < rhs->size1; ++k)
-	t += gsl_matrix_get(lhs, i, k) * gsl_matrix_get(rhs, k, j);
-      gsl_matrix_set(res, i, j, t);
+      {
+	/* e += l * r; */
+	const matrix_elem_t* const l = matrix_const_at(lhs, i, k);
+	const matrix_elem_t* const r = matrix_const_at(rhs, k, j);
+
+	matrix_elem_t mul;
+	matrix_elem_init(&mul);
+	matrix_elem_mul(&mul, l, r);
+
+	matrix_elem_add(e, &mul);
+
+	matrix_elem_clear(&mul);
+      }
     }
   }
 }
@@ -108,9 +85,9 @@ typedef struct work
   volatile long lock; /* aligned */
 
   /* res = lhs * rhs */
-  gsl_matrix* res;
-  gsl_matrix* lhs;
-  gsl_matrix* rhs;
+  matrix_t* res;
+  matrix_t* lhs;
+  matrix_t* rhs;
 
   /* remaining indices to compute */
   range_t range;
@@ -139,7 +116,7 @@ static inline unsigned int get_range_size(const range_t* range)
 }
 
 
-static inline void res_to_range(gsl_matrix* res, range_t* range)
+static inline void res_to_range(matrix_t* res, range_t* range)
 {
   range->i = 0;
   range->j = res->size1 * res->size2;
@@ -147,7 +124,7 @@ static inline void res_to_range(gsl_matrix* res, range_t* range)
 
 
 static inline void index_to_res
-(const gsl_matrix* res, unsigned int index, unsigned int* i, unsigned int* j)
+(const matrix_t* res, unsigned int index, unsigned int* i, unsigned int* j)
 {
   /* flat index into res ij pos */
 
@@ -158,7 +135,7 @@ static inline void index_to_res
 
 #if 0 /* ununsed */
 static void range_to_res
-(const gsl_matrix* res, const range_t* range,
+(const matrix_t* res, const range_t* range,
  unsigned int* imin, unsigned int* jmin,
  unsigned int* imax, unsigned int* jmax)
 {
@@ -171,8 +148,8 @@ static void range_to_res
 
 
 static void prepare_par_work
-(work_t* par_work, gsl_matrix* res,
- gsl_matrix* lhs, gsl_matrix* rhs,
+(work_t* par_work, matrix_t* res,
+ matrix_t* lhs, matrix_t* rhs,
  const range_t* range,
  kaapi_stealcontext_t* master_sc,
  kaapi_taskadaptive_result_t* ktr)
@@ -373,26 +350,28 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
     /* foreach n, compute res[index(n)] */
     for (n = seq_work.range.i; n < seq_work.range.j; ++n)
     {
-      double res = 0.f;
-
-      unsigned int i;
-      unsigned int j;
-      unsigned int k;
+      size_t i, j, k;
 
       index_to_res(seq_work.res, n, &i, &j);
 
+      /* e = 0; */
+      matrix_elem_t* const e = matrix_at(res, i, j);
+      matrix_elem_init(e);
+
       for (k = 0; k < seq_work.lhs->size2; ++k)
       {
-#if CONFIG_ADD_SEQLOAD
-	add_seq_load();
-#endif
+	/* e += l * r; */
+	const matrix_elem_t* const l = matrix_const_at(seq_work.lhs, i, k);
+	const matrix_elem_t* const r = matrix_const_at(seq_work.rhs, k, j);
 
-	res +=
-	  gsl_matrix_get(seq_work.lhs, i, k) *
-	  gsl_matrix_get(seq_work.rhs, k, j);
+	matrix_elem_t mul;
+	matrix_elem_init(&mul);
+	matrix_elem_mul(&mul, l, r);
+
+	matrix_elem_add(e, &mul);
+
+	matrix_elem_clear(&mul);
       }
-
-      gsl_matrix_set(seq_work.res, i, j, res);
     }
 
     /* check for preemption */
@@ -416,8 +395,8 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
   kaapi_steal_finalize(sc);
 }
 
-static void mult_matrix2
-(gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+static void mul_matrix1
+(matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
   work_t par_work;
   kaapi_thread_t* thread;
@@ -445,7 +424,7 @@ static void mult_matrix2
 }
 
 
-/* print helpers */
+#if 0 /* print helpers */
 
 static inline void print_double(double value)
 {
@@ -467,26 +446,26 @@ static void __attribute__((unused)) print_matrix(const gsl_matrix* m)
   }
 }
 
+#endif
+
 
 /* select the implementation to run */
 
-static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_matrix* rhs)
+static void mul_switch
+(unsigned int n, matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
-  void (*f)(gsl_matrix*, gsl_matrix*, gsl_matrix*) = NULL;
+  static void (*f)(matrix_t*, const matrix_t*, const matrix_t*) = NULL;
 
 #if CONFIG_USE_TICK
   tick_counter_t ticks[3];
 #endif
 
-#define CASE_TO_F(__f, __n) case __n: __f = mult_matrix ## __n; break
+#define CASE_TO_F(__f, __n) case __n: __f = mul_matrix ## __n; break
   switch (n)
   {
     CASE_TO_F(f, 0);
     CASE_TO_F(f, 1);
-    CASE_TO_F(f, 2);
   }
-
-  gsl_matrix_set_zero(res);
 
 #if CONFIG_USE_TICK
   tick_read(&ticks[0]);
@@ -514,74 +493,38 @@ static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_ma
 
 int main(int ac, char** av)
 {
-#define DIM 20
-
-  static const double lhs_data[] =
-  {
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
-    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2
-  };
-
-  static const double rhs_data[] =
-  {
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
-    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3
-  };
-
-  gsl_matrix* lhs_matrix = create_matrix_with_data
-    ((const double*)lhs_data, DIM, DIM);
-  gsl_matrix* rhs_matrix = create_matrix_with_data
-    ((const double*)rhs_data, DIM, DIM);
-  gsl_matrix* res_matrix = gsl_matrix_alloc(DIM, DIM);
+  matrix_t* lhs = NULL;
+  matrix_t* rhs = NULL;
+  matrix_t* res = NULL;
 
   unsigned int i;
+
+  if (ac != 4)
+    goto on_error;
+
+  if (matrix_load_file(&lhs, av[1]) == -1)
+    goto on_error;
+
+  if (matrix_load_file(&rhs, av[2]) == -1)
+    goto on_error;
+
+  if (matrix_create(&res, lhs->size1, rhs->size2) == -1)
+    goto on_error;
+
   for (i = 0; i < CONFIG_ITER_COUNT; ++i)
   {
-    mult_switch(0, res_matrix, lhs_matrix, rhs_matrix);
-    mult_switch(1, res_matrix, lhs_matrix, rhs_matrix);
-    mult_switch(2, res_matrix, lhs_matrix, rhs_matrix);
-    printf("--\n");
+    mul_switch(0, res, lhs, rhs);
+    mul_switch(1, res, lhs, rhs);
   }
 
-  gsl_matrix_free(lhs_matrix);
-  gsl_matrix_free(rhs_matrix);
-  gsl_matrix_free(res_matrix);
+ on_error:
+
+  if (res != NULL)
+    matrix_destroy(res);
+  if (lhs != NULL)
+    matrix_destroy(lhs);
+  if (rhs != NULL)
+    matrix_destroy(rhs);
 
   return 0;
 }
