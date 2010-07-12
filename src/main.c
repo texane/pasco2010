@@ -21,7 +21,7 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 3
+#define CONFIG_ITER_COUNT 1
 
 
 #if CONFIG_USE_TICK
@@ -36,6 +36,9 @@ extern struct kaapi_processor_t* kaapi_stealcontext_kproc(kaapi_stealcontext_t*)
 extern struct kaapi_processor_t* kaapi_request_kproc(kaapi_request_t*);
 extern unsigned int kaapi_request_kid(kaapi_request_t*);
 #endif
+
+
+extern unsigned int kaapi_get_current_kid(void);
 
 
 /* sequential handwritten version */
@@ -205,6 +208,10 @@ static int reduce_function
   work_t* const vwork = (work_t*)vptr;
   work_t* const twork = (work_t*)tptr;
 
+#if CONFIG_USE_DEBUG
+  printf("> reduce [%u - %u[\n", twork->range.i, twork->range.j);
+#endif
+
   /* lock vwork since may be in a splitting process */
   lock_work(vwork);
   vwork->range.i = twork->range.i;
@@ -295,6 +302,10 @@ static int split_function
     kaapi_taskadaptive_result_t* const ktr =
       kaapi_allocate_thief_result(sc, sizeof(work_t), NULL);
 
+    /* initialize ktr->data range in case of non preemption */
+    ((work_t*)ktr->data)->range.i = 0;
+    ((work_t*)ktr->data)->range.j = 0;
+
     /* initialize task stack */
     prepare_par_work
       (twork, vwork->res, vwork->lhs, vwork->rhs, &thief_range, sc, ktr);
@@ -313,6 +324,7 @@ static int split_function
 
   return reply_count;
 } /* split_function */
+
 
 
 static void task_entry(void* arg, kaapi_thread_t* thread)
@@ -380,7 +392,7 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
       const int is_preempted = kaapi_preemptpoint
 	(par_work->ktr, sc, NULL, NULL, par_work, sizeof(work_t), NULL);
       if (is_preempted)
-	return ;
+	goto finalize_task;
     }
   }
 
@@ -392,6 +404,8 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
     goto redo_work;
   }
 
+ finalize_task:
+  kaapi_set_self_workload(0);
   kaapi_steal_finalize(sc);
 }
 
@@ -520,7 +534,8 @@ int main(int ac, char** av)
 
   for (i = 0; i < CONFIG_ITER_COUNT; ++i)
   {
-    mul_switch(0, tmp, lhs, rhs);
+    if (tmp != NULL)
+      mul_switch(0, tmp, lhs, rhs);
     mul_switch(1, res, lhs, rhs);
     printf("--\n");
   }

@@ -18,7 +18,7 @@
 
 
 /* global line buffer */
-static char line_buf[4096];
+static char line_buf[4096 * 4];
 
 
 /* memory mapped file */
