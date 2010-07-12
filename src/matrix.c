@@ -99,7 +99,8 @@ static int read_line(mapped_file_t* mf, char** line)
 
 static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
 {
-  const size_t data_size = (size1 * size2 * sizeof(matrix_elem_t));
+  const size_t data_count = size1 * size2;
+  const size_t data_size = (data_count * sizeof(matrix_elem_t));
   const size_t total_size = offsetof(matrix_t, data) + data_size;
 
   matrix_t* const m = malloc(total_size);
@@ -108,6 +109,9 @@ static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
 
   m->size1 = size1;
   m->size2 = size2;
+
+#define MPZ_MAX_BITS 512
+  mpz_array_init(m->data[0], data_count, MPZ_MAX_BITS);
 
   return m;
 }
@@ -260,17 +264,7 @@ void matrix_gen_rand(matrix_t* m)
 
 void matrix_destroy(matrix_t* m)
 {
-  size_t i, j;
-
-  for (i = 0; i < m->size1; ++i)
-  {
-    for (j = 0; j < m->size2; ++j)
-    {
-      matrix_elem_t* const elem = matrix_at(m, i, j);
-      matrix_elem_clear(*elem);
-    }
-  }
-
+  mpz_clear(m->data[0]);
   free(m);
 }
 

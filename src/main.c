@@ -58,7 +58,6 @@ static void mul_matrix0
     {
       /* e = 0; */
       matrix_elem_t* const e = matrix_at(res, i, j);
-      matrix_elem_init(*e);
 
       for (k = 0; k < rhs->size1; ++k)
       {
@@ -365,7 +364,6 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
 
       /* e = 0; */
       matrix_elem_t* const e = matrix_at(seq_work.res, i, j);
-      matrix_elem_init(*e);
 
       for (k = 0; k < seq_work.lhs->size2; ++k)
       {
