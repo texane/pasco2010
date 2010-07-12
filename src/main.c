@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Sat Jul 10 09:21:21 2010 texane
-** Last update Mon Jul 12 03:37:17 2010 fabien le mentec
+** Last update Mon Jul 12 04:04:00 2010 fabien le mentec
 */
 
 
@@ -13,9 +13,14 @@
 #include "kaapi.h"
 
 
-#define CONFIG_USE_AFFINITY 1
 #define CONFIG_USE_TICK 1
 #define CONFIG_USE_WORKLOAD 1
+#define CONFIG_USE_DEBUG 1
+
+#define CONFIG_ADD_SEQLOAD 1
+
+#define CONFIG_PAR_SIZE 1
+#define CONFIG_SEQ_SIZE 1
 
 
 #if CONFIG_USE_TICK
@@ -23,19 +28,12 @@
 #endif
 
 
-#if CONFIG_USE_AFFINITY
-
+#if CONFIG_ADD_SEQLOAD
 #include <unistd.h>
-#define __USE_GNU 1
-#include <sched.h>
 
-static void set_cpu_affinity(unsigned int icpu)
+static void add_seq_load(void)
 {
-  cpu_set_t cpuset;
-
-  CPU_ZERO(&cpuset);
-  CPU_SET(icpu, &cpuset);
-  sched_setaffinity(getpid(), sizeof(cpu_set_t), &cpuset);
+  usleep(10000);
 }
 
 #endif
@@ -198,10 +196,9 @@ static int next_seq_work(work_t* seq_work, work_t* par_work)
 {
   /* extract sequential work */
 
-#define SEQ_SIZE 1
-
   const unsigned int range_size = get_range_size(&par_work->range);
-  const unsigned int seq_size = range_size < SEQ_SIZE ? range_size : SEQ_SIZE;
+  const unsigned int seq_size = range_size < CONFIG_SEQ_SIZE ?
+    range_size : CONFIG_SEQ_SIZE;
 
   if (!seq_size)
     return -1;
@@ -261,14 +258,13 @@ static int split_function
   if (range_size == 0)
     goto dont_steal;
 
-#define PAR_SIZE 1
   unit_size = range_size / (request_count + 1);
-  if (unit_size < PAR_SIZE)
+  if (unit_size < CONFIG_PAR_SIZE)
   {
-    request_count = (range_size / PAR_SIZE) - 1;
+    request_count = (range_size / CONFIG_PAR_SIZE) - 1;
     if (request_count <= 0)
       goto dont_steal;
-    unit_size = PAR_SIZE;
+    unit_size = CONFIG_PAR_SIZE;
   }
 
   /* steal the range */
@@ -288,6 +284,10 @@ static int split_function
 
   if (!has_stolen)
     return 0;
+
+#if CONFIG_USE_DEBUG
+  printf("steal_size %u\n", steal_size);
+#endif
 
   /* reply requests */
 
@@ -339,6 +339,10 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
   work_t* const par_work = (work_t*)arg;
   work_t seq_work;
 
+#if CONFIG_USE_DEBUG
+  printf("task_entry [%u - %u[\n", par_work->range.i, par_work->range.j);
+#endif
+
   /* push the adaptive task */
   const int sc_flags = (par_work->master_sc == NULL) ?
     KAAPI_STEALCONTEXT_DEFAULT : KAAPI_STEALCONTEXT_LINKED;
@@ -362,6 +366,10 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
     if (res == -1)
       break ;
 
+#if CONFIG_USE_DEBUG
+    printf("seq_work [%u - %u[\n", seq_work.range.i, seq_work.range.j);
+#endif
+
     /* foreach n, compute res[index(n)] */
     for (n = seq_work.range.i; n < seq_work.range.j; ++n)
     {
@@ -375,6 +383,10 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
 
       for (k = 0; k < seq_work.lhs->size2; ++k)
       {
+#if CONFIG_ADD_SEQLOAD
+	add_seq_load();
+#endif
+
 	res +=
 	  gsl_matrix_get(seq_work.lhs, i, k) *
 	  gsl_matrix_get(seq_work.rhs, k, j);
@@ -500,19 +512,33 @@ static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_ma
 
 int main(int ac, char** av)
 {
+#define DIM 7
+
   static const double lhs_data[] =
-    { 0, 1, 1.f/3.f, -1 };
+    {
+      0, 1, 1.f/3.f, 3, 2, 1, 2,
+      0, 1, 1.f/3.f, 3, 2, 1, 2,
+      0, 1, 1.f/3.f, 3, 2, 1, 2,
+      0, 1, 1.f/3.f, 3, 2, 1, 2,
+      0, 1, 1.f/3.f, 3, 2, 1, 2,
+      0, 1, 1.f/3.f, 3, 2, 1, 2,
+      0, 1, 1.f/3.f, 3, 2, 1, 2
+    };
 
   static const double rhs_data[] =
-    { 1, -1, 2.f/3.f, -2 };
+    {
+      1, -1, 2.f/3.f, 2, 3, 1, 3,
+      1, -1, 2.f/3.f, 2, 3, 1, 3,
+      1, -1, 2.f/3.f, 2, 3, 1, 3,
+      1, -1, 2.f/3.f, 2, 3, 1, 3,
+      1, -1, 2.f/3.f, 2, 3, 1, 3,
+      1, -1, 2.f/3.f, 2, 3, 1, 3,
+      1, -1, 2.f/3.f, 2, 3, 1, 3
+    };
 
-  gsl_matrix* lhs_matrix = create_matrix_with_data((const double*)lhs_data, 2, 2);
-  gsl_matrix* rhs_matrix = create_matrix_with_data((const double*)rhs_data, 2, 2);
-  gsl_matrix* res_matrix = gsl_matrix_alloc(2, 2);
-
-#if CONFIG_USE_AFFINITY
-  set_cpu_affinity(1);
-#endif
+  gsl_matrix* lhs_matrix = create_matrix_with_data((const double*)lhs_data, DIM, DIM);
+  gsl_matrix* rhs_matrix = create_matrix_with_data((const double*)rhs_data, DIM, DIM);
+  gsl_matrix* res_matrix = gsl_matrix_alloc(DIM, DIM);
 
   mult_switch(0, res_matrix, lhs_matrix, rhs_matrix);
   mult_switch(1, res_matrix, lhs_matrix, rhs_matrix);
