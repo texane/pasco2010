@@ -23,6 +23,8 @@
 
 #define CONFIG_ITER_COUNT 2
 
+#define CONFIG_DO_CHECK 1
+
 
 #if CONFIG_USE_TICK
 #include "tick.h"
@@ -514,17 +516,26 @@ int main(int ac, char** av)
   if (matrix_create(&res, lhs->size1, rhs->size2) == -1)
     goto on_error;
 
+#if !CONFIG_DO_CHECK
   if (ac == 5)
-  {
+#endif
     if (matrix_create(&tmp, lhs->size1, rhs->size2) == -1)
       goto on_error;
-  }
 
   for (i = 0; i < CONFIG_ITER_COUNT; ++i)
   {
+#if !CONFIG_DO_CHECK
     if (tmp != NULL)
+#endif
       mul_switch(0, tmp, lhs, rhs);
+
     mul_switch(1, res, lhs, rhs);
+
+#if CONFIG_DO_CHECK
+    if (matrix_cmp(tmp, res))
+      printf("invalid\n");
+#endif
+
     printf("--\n");
   }
 
