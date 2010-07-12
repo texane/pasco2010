@@ -15,12 +15,16 @@
 
 #define CONFIG_USE_TICK 1
 #define CONFIG_USE_WORKLOAD 1
-#define CONFIG_USE_DEBUG 1
+#define CONFIG_USE_DEBUG 0
 
-#define CONFIG_ADD_SEQLOAD 1
+#define CONFIG_ADD_SEQLOAD 0
 
 #define CONFIG_PAR_SIZE 1
 #define CONFIG_SEQ_SIZE 1
+
+#define CONFIG_PRINT_RES 0
+
+#define CONFIG_ITER_COUNT 10
 
 
 #if CONFIG_USE_TICK
@@ -286,7 +290,7 @@ static int split_function
     return 0;
 
 #if CONFIG_USE_DEBUG
-  printf("steal_size %u\n", steal_size);
+  printf("steal_size %lu\n", steal_size);
 #endif
 
   /* reply requests */
@@ -365,10 +369,6 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
 
     if (res == -1)
       break ;
-
-#if CONFIG_USE_DEBUG
-    printf("seq_work [%u - %u[\n", seq_work.range.i, seq_work.range.j);
-#endif
 
     /* foreach n, compute res[index(n)] */
     for (n = seq_work.range.i; n < seq_work.range.j; ++n)
@@ -455,7 +455,7 @@ static inline void print_double(double value)
 }
 
 
-static void print_matrix(const gsl_matrix* m)
+static void __attribute__((unused)) print_matrix(const gsl_matrix* m)
 {
   size_t i, j;
 
@@ -500,11 +500,13 @@ static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_ma
 
 #if CONFIG_USE_TICK
   tick_sub(&ticks[2], &ticks[1], &ticks[0]);
-  printf("ticks: %llu\n", ticks[2].value);
+  printf("ticks: %lu\n", ticks[2].value);
 #endif
 
+#if CONFIG_PRINT_RES
   print_matrix(res);
   printf("---\n");
+#endif
 }
 
 
@@ -512,37 +514,70 @@ static void mult_switch(unsigned int n, gsl_matrix* res, gsl_matrix* lhs, gsl_ma
 
 int main(int ac, char** av)
 {
-#define DIM 7
+#define DIM 20
 
   static const double lhs_data[] =
-    {
-      0, 1, 1.f/3.f, 3, 2, 1, 2,
-      0, 1, 1.f/3.f, 3, 2, 1, 2,
-      0, 1, 1.f/3.f, 3, 2, 1, 2,
-      0, 1, 1.f/3.f, 3, 2, 1, 2,
-      0, 1, 1.f/3.f, 3, 2, 1, 2,
-      0, 1, 1.f/3.f, 3, 2, 1, 2,
-      0, 1, 1.f/3.f, 3, 2, 1, 2
-    };
+  {
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2,
+    0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2, 0, 1, 1.f/3.f, 3, 2, 1, 2, 2, 2, 2
+  };
 
   static const double rhs_data[] =
-    {
-      1, -1, 2.f/3.f, 2, 3, 1, 3,
-      1, -1, 2.f/3.f, 2, 3, 1, 3,
-      1, -1, 2.f/3.f, 2, 3, 1, 3,
-      1, -1, 2.f/3.f, 2, 3, 1, 3,
-      1, -1, 2.f/3.f, 2, 3, 1, 3,
-      1, -1, 2.f/3.f, 2, 3, 1, 3,
-      1, -1, 2.f/3.f, 2, 3, 1, 3
-    };
+  {
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3,
+    1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3, 1, -1, 2.f/3.f, 2, 3, 1, 3, 3, 3, 3
+  };
 
-  gsl_matrix* lhs_matrix = create_matrix_with_data((const double*)lhs_data, DIM, DIM);
-  gsl_matrix* rhs_matrix = create_matrix_with_data((const double*)rhs_data, DIM, DIM);
+  gsl_matrix* lhs_matrix = create_matrix_with_data
+    ((const double*)lhs_data, DIM, DIM);
+  gsl_matrix* rhs_matrix = create_matrix_with_data
+    ((const double*)rhs_data, DIM, DIM);
   gsl_matrix* res_matrix = gsl_matrix_alloc(DIM, DIM);
 
-  mult_switch(0, res_matrix, lhs_matrix, rhs_matrix);
-  mult_switch(1, res_matrix, lhs_matrix, rhs_matrix);
-  mult_switch(2, res_matrix, lhs_matrix, rhs_matrix);
+  unsigned int i;
+  for (i = 0; i < CONFIG_ITER_COUNT; ++i)
+  {
+    mult_switch(0, res_matrix, lhs_matrix, rhs_matrix);
+    mult_switch(1, res_matrix, lhs_matrix, rhs_matrix);
+    mult_switch(2, res_matrix, lhs_matrix, rhs_matrix);
+    printf("--\n");
+  }
 
   gsl_matrix_free(lhs_matrix);
   gsl_matrix_free(rhs_matrix);
