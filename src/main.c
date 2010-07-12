@@ -21,7 +21,7 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 10
+#define CONFIG_ITER_COUNT 3
 
 
 #if CONFIG_USE_TICK
@@ -496,10 +496,11 @@ int main(int ac, char** av)
   matrix_t* lhs = NULL;
   matrix_t* rhs = NULL;
   matrix_t* res = NULL;
+  matrix_t* tmp = NULL;
 
   unsigned int i;
 
-  if (ac != 4)
+  if (ac < 4)
     goto on_error;
 
   if (matrix_load_file(&lhs, av[1]) == -1)
@@ -511,16 +512,30 @@ int main(int ac, char** av)
   if (matrix_create(&res, lhs->size1, rhs->size2) == -1)
     goto on_error;
 
+  if (ac == 5)
+  {
+    if (matrix_create(&tmp, lhs->size1, rhs->size2) == -1)
+      goto on_error;
+  }
+
   for (i = 0; i < CONFIG_ITER_COUNT; ++i)
   {
-    mul_switch(0, res, lhs, rhs);
+    mul_switch(0, tmp, lhs, rhs);
     mul_switch(1, res, lhs, rhs);
+    printf("--\n");
   }
+
+  /* store the last ones */
+  if (ac == 5)
+    matrix_store_file(tmp, av[4]);
+  matrix_store_file(res, av[3]);
 
  on_error:
 
   if (res != NULL)
     matrix_destroy(res);
+  if (tmp != NULL)
+    matrix_destroy(tmp);
   if (lhs != NULL)
     matrix_destroy(lhs);
   if (rhs != NULL)
