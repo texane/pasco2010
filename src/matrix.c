@@ -113,9 +113,9 @@ static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
 }
 
 
-/* exported */
+/* load a matrix from file */
 
-int matrix_load_file(matrix_t** m, const char* path)
+static int load_file(matrix_t** m, const char* path, unsigned int is_transposed)
 {
   mapped_file_t mf;
   int error = -1;
@@ -144,7 +144,13 @@ int matrix_load_file(matrix_t** m, const char* path)
 
   while ((read_line(&mf, &line)) != -1)
   {
-    matrix_elem_t* const elem = matrix_at(*m, i, j);
+    matrix_elem_t* elem;
+
+    if (is_transposed)
+      elem = matrix_at(*m, j, i);
+    else
+      elem = matrix_at(*m, i, j);
+
     if (matrix_elem_set_str(*elem, line))
       goto on_error;
 
@@ -164,6 +170,21 @@ int matrix_load_file(matrix_t** m, const char* path)
 
   return error;
 }
+
+
+/* exported */
+
+int matrix_load_file(matrix_t** m, const char* path)
+{
+  return load_file(m, path, 0);
+}
+
+
+int matrix_load_file_transposed(matrix_t** m, const char* path)
+{
+  return load_file(m, path, 1);
+}
+
 
 int matrix_store_file(const matrix_t* m, const char* path)
 {

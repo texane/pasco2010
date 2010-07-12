@@ -21,9 +21,9 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 1
+#define CONFIG_ITER_COUNT 2
 
-#define CONFIG_DO_CHECK 0
+#define CONFIG_DO_CHECK 1
 
 
 #if CONFIG_USE_TICK
@@ -64,7 +64,7 @@ static void mul_matrix0
       {
 	/* e += l * r; */
 	const matrix_elem_t* const l = matrix_const_at(lhs, i, k);
-	const matrix_elem_t* const r = matrix_const_at(rhs, k, j);
+	const matrix_elem_t* const r = matrix_const_at_transposed(rhs, k, j);
 	matrix_elem_addmul(*e, *l, *r);
       }
     }
@@ -371,7 +371,7 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
       {
 	/* e += l * r; */
 	const matrix_elem_t* const l = matrix_const_at(seq_work.lhs, i, k);
-	const matrix_elem_t* const r = matrix_const_at(seq_work.rhs, k, j);
+	const matrix_elem_t* const r = matrix_const_at_transposed(seq_work.rhs, k, j);
 	matrix_elem_addmul(*e, *l, *r);
       }
     }
@@ -510,7 +510,7 @@ int main(int ac, char** av)
   if (matrix_load_file(&lhs, av[1]) == -1)
     goto on_error;
 
-  if (matrix_load_file(&rhs, av[2]) == -1)
+  if (matrix_load_file_transposed(&rhs, av[2]) == -1)
     goto on_error;
 
   if (matrix_create(&res, lhs->size1, rhs->size2) == -1)
