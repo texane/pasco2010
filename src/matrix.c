@@ -224,8 +224,7 @@ int matrix_create(matrix_t** m, size_t size1, size_t size2)
 
 void matrix_gen_rand(matrix_t* m)
 {
-  size_t i;
-  size_t j;
+  size_t i, j;
 
   for (i = 0; i < m->size1; ++i)
   {
@@ -240,17 +239,18 @@ void matrix_gen_rand(matrix_t* m)
 
 void matrix_destroy(matrix_t* m)
 {
+  size_t i, j;
+
+  for (i = 0; i < m->size1; ++i)
+  {
+    for (j = 0; j < m->size2; ++j)
+    {
+      matrix_elem_t* const elem = matrix_at(m, i, j);
+      matrix_elem_clear(*elem);
+    }
+  }
+
   free(m);
-}
-
-matrix_elem_t* matrix_at(matrix_t* m, size_t i, size_t j)
-{
-  return &m->data[i * m->size2 + j];
-}
-
-const matrix_elem_t* matrix_const_at(const matrix_t* m, size_t i, size_t j)
-{
-  return &m->data[i * m->size2 + j];
 }
 
 int matrix_cmp(const matrix_t* lhs, const matrix_t* rhs)

@@ -54,6 +54,14 @@ static inline void matrix_elem_add
   mpz_add(res, res, op);
 }
 
+
+static inline void matrix_elem_addmul
+(matrix_elem_t res, const matrix_elem_t lhs, const matrix_elem_t rhs)
+{
+  /* res += lhs * rhs; */
+  mpz_addmul(res, lhs, rhs);
+}
+
 static inline int matrix_elem_cmp
 (const matrix_elem_t lhs, const matrix_elem_t rhs)
 {
@@ -71,15 +79,26 @@ typedef struct matrix
 } matrix_t;
 
 
+/* exported non inlined */
 int matrix_load_file(matrix_t**, const char*);
 int matrix_store_file(const matrix_t*, const char*);
 void matrix_print(const matrix_t*);
 int matrix_create(matrix_t**, size_t, size_t);
 void matrix_gen_rand(matrix_t*);
 void matrix_destroy(matrix_t*);
-matrix_elem_t* matrix_at(matrix_t*, size_t, size_t);
-const matrix_elem_t* matrix_const_at(const matrix_t*, size_t, size_t);
 int matrix_cmp(const matrix_t*, const matrix_t*);
+
+/* exported inlined */
+static inline matrix_elem_t* matrix_at(matrix_t* m, size_t i, size_t j)
+{
+  return &m->data[i * m->size2 + j];
+}
+
+static inline const matrix_elem_t* matrix_const_at
+(const matrix_t* m, size_t i, size_t j)
+{
+  return &m->data[i * m->size2 + j];
+}
 
 
 #endif /* ! MATRIX_H_INCLUDED */

@@ -21,7 +21,7 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 1
+#define CONFIG_ITER_COUNT 2
 
 
 #if CONFIG_USE_TICK
@@ -38,7 +38,9 @@ extern unsigned int kaapi_request_kid(kaapi_request_t*);
 #endif
 
 
+#if CONFIG_USE_DEBUG
 extern unsigned int kaapi_get_current_kid(void);
+#endif
 
 
 /* sequential handwritten version */
@@ -61,14 +63,7 @@ static void mul_matrix0
 	/* e += l * r; */
 	const matrix_elem_t* const l = matrix_const_at(lhs, i, k);
 	const matrix_elem_t* const r = matrix_const_at(rhs, k, j);
-
-	matrix_elem_t mul;
-	matrix_elem_init(mul);
-	matrix_elem_mul(mul, *l, *r);
-
-	matrix_elem_add(*e, mul);
-
-	matrix_elem_clear(mul);
+	matrix_elem_addmul(*e, *l, *r);
       }
     }
   }
@@ -375,14 +370,7 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
 	/* e += l * r; */
 	const matrix_elem_t* const l = matrix_const_at(seq_work.lhs, i, k);
 	const matrix_elem_t* const r = matrix_const_at(seq_work.rhs, k, j);
-
-	matrix_elem_t mul;
-	matrix_elem_init(mul);
-	matrix_elem_mul(mul, *l, *r);
-
-	matrix_elem_add(*e, mul);
-
-	matrix_elem_clear(mul);
+	matrix_elem_addmul(*e, *l, *r);
       }
     }
 
