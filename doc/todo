@@ -3,6 +3,8 @@
 . adjust grains
 . split per block
 
+. use muladd in matrix multiplication
+
 . matrix.c
  . line should not be reallocated each time
  . check write return vals

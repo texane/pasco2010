@@ -145,7 +145,7 @@ int matrix_load_file(matrix_t** m, const char* path)
   while ((read_line(&mf, &line)) != -1)
   {
     matrix_elem_t* const elem = matrix_at(*m, i, j);
-    if (matrix_elem_set_str(elem, line))
+    if (matrix_elem_set_str(*elem, line))
       goto on_error;
 
     /* next i, j */
@@ -185,7 +185,7 @@ int matrix_store_file(const matrix_t* m, const char* path)
     for (j = 0; j < m->size2; ++j)
     {
       const matrix_elem_t* const elem = matrix_const_at(m, i, j);
-      matrix_elem_get_str(elem, line_buf);
+      matrix_elem_get_str(*elem, line_buf);
       len = strlen(line_buf);
       line_buf[len++] = '\n';
       write(fd, line_buf, len);
@@ -207,7 +207,7 @@ void matrix_print(const matrix_t* m)
     for (j = 0; j < m->size2; ++j)
     {
       const matrix_elem_t* const elem = matrix_const_at(m, i, j);
-      printf("%s ", matrix_elem_get_str(elem, line_buf));
+      printf("%s ", matrix_elem_get_str(*elem, line_buf));
     }
     printf("\n");
   }
@@ -233,7 +233,7 @@ void matrix_gen_rand(matrix_t* m)
     {
       matrix_elem_t* const elem = matrix_at(m, i, j);
       sprintf(line_buf, "%u", (unsigned int)(rand() % 10));
-      matrix_elem_set_str(elem, line_buf);
+      matrix_elem_set_str(*elem, line_buf);
     }
   }
 }
@@ -267,7 +267,7 @@ int matrix_cmp(const matrix_t* lhs, const matrix_t* rhs)
       const matrix_elem_t* const a = matrix_const_at(lhs, i, j);
       const matrix_elem_t* const b = matrix_const_at(rhs, i, j);
 
-      if (matrix_elem_cmp(a, b))
+      if (matrix_elem_cmp(*a, *b))
 	return -1;
     }
   }

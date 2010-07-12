@@ -51,7 +51,7 @@ static void mul_matrix0
     {
       /* e = 0; */
       matrix_elem_t* const e = matrix_at(res, i, j);
-      matrix_elem_init(e);
+      matrix_elem_init(*e);
 
       for (k = 0; k < rhs->size1; ++k)
       {
@@ -60,12 +60,12 @@ static void mul_matrix0
 	const matrix_elem_t* const r = matrix_const_at(rhs, k, j);
 
 	matrix_elem_t mul;
-	matrix_elem_init(&mul);
-	matrix_elem_mul(&mul, l, r);
+	matrix_elem_init(mul);
+	matrix_elem_mul(mul, *l, *r);
 
-	matrix_elem_add(e, &mul);
+	matrix_elem_add(*e, mul);
 
-	matrix_elem_clear(&mul);
+	matrix_elem_clear(mul);
       }
     }
   }
@@ -86,8 +86,8 @@ typedef struct work
 
   /* res = lhs * rhs */
   matrix_t* res;
-  matrix_t* lhs;
-  matrix_t* rhs;
+  const matrix_t* lhs;
+  const matrix_t* rhs;
 
   /* remaining indices to compute */
   range_t range;
@@ -124,7 +124,7 @@ static inline void res_to_range(matrix_t* res, range_t* range)
 
 
 static inline void index_to_res
-(const matrix_t* res, unsigned int index, unsigned int* i, unsigned int* j)
+(const matrix_t* res, size_t index, size_t* i, size_t* j)
 {
   /* flat index into res ij pos */
 
@@ -149,7 +149,7 @@ static void range_to_res
 
 static void prepare_par_work
 (work_t* par_work, matrix_t* res,
- matrix_t* lhs, matrix_t* rhs,
+ const matrix_t* lhs, const matrix_t* rhs,
  const range_t* range,
  kaapi_stealcontext_t* master_sc,
  kaapi_taskadaptive_result_t* ktr)
@@ -337,7 +337,7 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
  redo_work:
   while (1)
   {
-    unsigned int n;
+    size_t n;
     int res;
 
     lock_work(par_work);
@@ -355,8 +355,8 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
       index_to_res(seq_work.res, n, &i, &j);
 
       /* e = 0; */
-      matrix_elem_t* const e = matrix_at(res, i, j);
-      matrix_elem_init(e);
+      matrix_elem_t* const e = matrix_at(seq_work.res, i, j);
+      matrix_elem_init(*e);
 
       for (k = 0; k < seq_work.lhs->size2; ++k)
       {
@@ -365,12 +365,12 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
 	const matrix_elem_t* const r = matrix_const_at(seq_work.rhs, k, j);
 
 	matrix_elem_t mul;
-	matrix_elem_init(&mul);
-	matrix_elem_mul(&mul, l, r);
+	matrix_elem_init(mul);
+	matrix_elem_mul(mul, *l, *r);
 
-	matrix_elem_add(e, &mul);
+	matrix_elem_add(*e, mul);
 
-	matrix_elem_clear(&mul);
+	matrix_elem_clear(mul);
       }
     }
 

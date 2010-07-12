@@ -18,46 +18,46 @@
 
 typedef mpz_t matrix_elem_t;
 
-static inline void matrix_elem_init(matrix_elem_t* elem)
+static inline void matrix_elem_init(matrix_elem_t elem)
 {
   /* set value to 0 */
-  mpz_init(*elem);
+  mpz_init(elem);
 }
 
-static inline void matrix_elem_clear(matrix_elem_t* elem)
+static inline void matrix_elem_clear(matrix_elem_t elem)
 {
-  mpz_clear(*elem);
+  mpz_clear(elem);
 }
 
 static inline int matrix_elem_set_str
-(matrix_elem_t* elem, const char* s)
+(matrix_elem_t elem, const char* s)
 {
-  return mpz_init_set_str(*elem, s, 10);
+  return mpz_init_set_str(elem, s, 10);
 }
 
 static inline char* matrix_elem_get_str
-(const matrix_elem_t* elem, char* s)
+(const matrix_elem_t elem, char* s)
 {
-  return mpz_get_str(s, 10, *elem);
+  return mpz_get_str(s, 10, elem);
 }
 
 static inline void matrix_elem_mul
-(matrix_elem_t* res, const matrix_elem_t* lhs, const matrix_elem_t* rhs)
+(matrix_elem_t res, const matrix_elem_t lhs, const matrix_elem_t rhs)
 {
-  mpz_mul(*res, *lhs, *rhs);
+  mpz_mul(res, lhs, rhs);
 }
 
 static inline void matrix_elem_add
-(matrix_elem_t* res, const matrix_elem_t* op)
+(matrix_elem_t res, const matrix_elem_t op)
 {
   /* res *= op */
-  mpz_add(*res, *res, *op);
+  mpz_add(res, res, op);
 }
 
 static inline int matrix_elem_cmp
-(const matrix_elem_t* lhs, const matrix_elem_t* rhs)
+(const matrix_elem_t lhs, const matrix_elem_t rhs)
 {
-  return mpz_cmp(*lhs, *rhs);
+  return mpz_cmp(lhs, rhs);
 }
 
 
