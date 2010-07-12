@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
 
-XKAAPIDIR=/home/texane/install
+XKAAPIDIR=$HOME/install
 
-gcc -Wall -O3 -I$XKAAPIDIR/include -I. ../src/main.c -lgsl -lblas -L$XKAAPIDIR/lib -lxkaapi -lpthread
+gcc -std=c99 -Wall -O3 -I$XKAAPIDIR/include -I. ../src/main.c -lgsl -lblas -L$XKAAPIDIR/lib -lxkaapi -lpthread
