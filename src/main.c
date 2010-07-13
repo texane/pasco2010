@@ -16,12 +16,12 @@
 #define CONFIG_USE_WORKLOAD 1
 #define CONFIG_USE_DEBUG 0
 
-#define CONFIG_PAR_SIZE 1
+#define CONFIG_PAR_SIZE 8
 #define CONFIG_SEQ_SIZE 1
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 2
+#define CONFIG_ITER_COUNT 3
 
 #define CONFIG_DO_CHECK 1
 
@@ -369,7 +369,8 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
       {
 	/* e += l * r; */
 	const matrix_elem_t* const l = matrix_const_at(seq_work.lhs, i, k);
-	const matrix_elem_t* const r = matrix_const_at_transposed(seq_work.rhs, k, j);
+	const matrix_elem_t* const r =
+	  matrix_const_at_transposed(seq_work.rhs, k, j);
 	matrix_elem_addmul(*e, *l, *r);
       }
     }
@@ -511,13 +512,13 @@ int main(int ac, char** av)
   if (matrix_load_file_transposed(&rhs, av[2], 10000) == -1)
     goto on_error;
 
-  if (matrix_create(&res, lhs->size1, rhs->size2) == -1)
+  if (matrix_create(&res, lhs->size1, rhs->size2, 30000) == -1)
     goto on_error;
 
 #if !CONFIG_DO_CHECK
   if (ac == 5)
 #endif
-    if (matrix_create(&tmp, lhs->size1, rhs->size2) == -1)
+    if (matrix_create(&tmp, lhs->size1, rhs->size2, 30000) == -1)
       goto on_error;
 
   for (i = 0; i < CONFIG_ITER_COUNT; ++i)
@@ -536,6 +537,7 @@ int main(int ac, char** av)
 
     printf("--\n");
   }
+  printf("==\n");
 
   /* store the last ones */
   if (ac == 5)

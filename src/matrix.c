@@ -268,9 +268,9 @@ void matrix_print(const matrix_t* m)
   }
 }
 
-int matrix_create(matrix_t** m, size_t size1, size_t size2)
+int matrix_create(matrix_t** m, size_t size1, size_t size2, size_t size3)
 {
-  *m = alloc_matrix(size1, size2, 0);
+  *m = alloc_matrix(size1, size2, size3);
   if (*m == NULL)
     return -1;
 
