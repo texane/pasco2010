@@ -505,10 +505,10 @@ int main(int ac, char** av)
   if (ac < 4)
     goto on_error;
 
-  if (matrix_load_file(&lhs, av[1]) == -1)
+  if (matrix_load_file(&lhs, av[1], 10000) == -1)
     goto on_error;
 
-  if (matrix_load_file_transposed(&rhs, av[2]) == -1)
+  if (matrix_load_file_transposed(&rhs, av[2], 10000) == -1)
     goto on_error;
 
   if (matrix_create(&res, lhs->size1, rhs->size2) == -1)

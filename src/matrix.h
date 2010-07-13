@@ -73,15 +73,19 @@ static inline int matrix_elem_cmp
 
 typedef struct matrix
 {
+#define MATRIX_FLAG_MPZ_ARRAY (1 << 0)
+  unsigned int flags;
+
   size_t size1;
   size_t size2;
+
   matrix_elem_t data[1] __attribute__((aligned(64)));
 } matrix_t;
 
 
 /* exported non inlined */
-int matrix_load_file(matrix_t**, const char*);
-int matrix_load_file_transposed(matrix_t**, const char*);
+int matrix_load_file(matrix_t**, const char*, size_t);
+int matrix_load_file_transposed(matrix_t**, const char*, size_t);
 int matrix_store_file(const matrix_t*, const char*);
 void matrix_print(const matrix_t*);
 int matrix_create(matrix_t**, size_t, size_t);

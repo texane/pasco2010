@@ -97,7 +97,7 @@ static int read_line(mapped_file_t* mf, char** line)
   return 0;
 }
 
-static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
+static matrix_t* alloc_matrix(size_t size1, size_t size2, size_t size3)
 {
   const size_t data_count = size1 * size2;
   const size_t data_size = (data_count * sizeof(matrix_elem_t));
@@ -107,19 +107,49 @@ static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
   if (m == NULL)
     return NULL;
 
+  m->flags = 0;
   m->size1 = size1;
   m->size2 = size2;
 
-#define MPZ_MAX_BITS 512
-  mpz_array_init(m->data[0], data_count, MPZ_MAX_BITS);
+  if (size3 == 0)
+  {
+    size_t i, j;
+    for (i = 0; i < m->size1; ++i)
+      for (j = 0; j < m->size2; ++j)
+	mpz_init(*matrix_at(m, i, j));
+  }
+  else
+  {
+    m->flags |= MATRIX_FLAG_MPZ_ARRAY;
+    mpz_array_init(m->data[0], data_count, size3);
+  }
 
   return m;
 }
 
 
+static void free_matrix(matrix_t* m)
+{
+  if (m->flags & MATRIX_FLAG_MPZ_ARRAY)
+  {
+    mpz_clear(m->data[0]);
+  }
+  else
+  {
+    size_t i, j;
+    for (i = 0; i < m->size1; ++i)
+      for (j = 0; j < m->size2; ++j)
+	mpz_clear(*matrix_at(m, i, j));
+  }
+  
+  free(m);
+}
+
+
 /* load a matrix from file */
 
-static int load_file(matrix_t** m, const char* path, unsigned int is_transposed)
+static int load_file
+(matrix_t** m, const char* path, unsigned int is_transposed, size_t size3)
 {
   mapped_file_t mf;
   int error = -1;
@@ -142,7 +172,7 @@ static int load_file(matrix_t** m, const char* path, unsigned int is_transposed)
   sscanf(line, "%lu %lu", &size1, &size2);
 
   /* allocate m, n matrix */
-  *m = allocate_matrix(size1, size2);
+  *m = alloc_matrix(size1, size2, size3);
   if (*m == NULL)
     goto on_error;
 
@@ -178,15 +208,15 @@ static int load_file(matrix_t** m, const char* path, unsigned int is_transposed)
 
 /* exported */
 
-int matrix_load_file(matrix_t** m, const char* path)
+int matrix_load_file(matrix_t** m, const char* path, size_t size3)
 {
-  return load_file(m, path, 0);
+  return load_file(m, path, 0, size3);
 }
 
 
-int matrix_load_file_transposed(matrix_t** m, const char* path)
+int matrix_load_file_transposed(matrix_t** m, const char* path, size_t size3)
 {
-  return load_file(m, path, 1);
+  return load_file(m, path, 1, size3);
 }
 
 
@@ -240,7 +270,7 @@ void matrix_print(const matrix_t* m)
 
 int matrix_create(matrix_t** m, size_t size1, size_t size2)
 {
-  *m = allocate_matrix(size1, size2);
+  *m = alloc_matrix(size1, size2, 0);
   if (*m == NULL)
     return -1;
 
@@ -264,8 +294,7 @@ void matrix_gen_rand(matrix_t* m)
 
 void matrix_destroy(matrix_t* m)
 {
-  mpz_clear(m->data[0]);
-  free(m);
+  free_matrix(m);
 }
 
 int matrix_cmp(const matrix_t* lhs, const matrix_t* rhs)
