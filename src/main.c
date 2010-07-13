@@ -21,9 +21,9 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 1
+#define CONFIG_ITER_COUNT 10
 
-#define CONFIG_DO_CHECK 0
+#define CONFIG_DO_CHECK 1
 
 
 #if CONFIG_USE_TICK
@@ -71,6 +71,32 @@ static void mul_matrix0
   }
 }
 
+/* inline element accesses */
+static void mul_matrix1
+(matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
+{
+  size_t i, j, k;
+
+  matrix_elem_t* e = matrix_at(res, 0, 0);
+
+  for (i = 0; i < lhs->size1; ++i)
+  {
+    for (j = 0; j < lhs->size2; ++j, ++e)
+    {
+      /* e = 0; */
+      matrix_elem_init(*e);
+
+      const matrix_elem_t* l = matrix_const_at(lhs, i, 0);
+      const matrix_elem_t* r = matrix_const_at(lhs, 0, j);
+
+      for (k = 0; k < rhs->size1; ++k, ++l, r += rhs->size2)
+      {
+	/* e += l * r; */
+	matrix_elem_addmul(*e, *l, *r);
+      }
+    }
+  }
+}
 
 /* xkaapi parallel version */
 
@@ -367,11 +393,12 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
       matrix_elem_t* const e = matrix_at(seq_work.res, i, j);
       matrix_elem_init(*e);
 
-      for (k = 0; k < seq_work.lhs->size2; ++k)
+      const matrix_elem_t* l = matrix_const_at(seq_work.lhs, i, 0);
+      const matrix_elem_t* r = matrix_const_at(seq_work.rhs, 0, j);
+
+      for (k = 0; k < seq_work.lhs->size2; ++k, ++l, r += seq_work.rhs->size2)
       {
 	/* e += l * r; */
-	const matrix_elem_t* const l = matrix_const_at(seq_work.lhs, i, k);
-	const matrix_elem_t* const r = matrix_const_at(seq_work.rhs, k, j);
 	matrix_elem_addmul(*e, *l, *r);
       }
     }
@@ -399,7 +426,7 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
   kaapi_steal_finalize(sc);
 }
 
-static void mul_matrix1
+static void mul_matrix2
 (matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
   work_t par_work;
@@ -469,6 +496,7 @@ static void mul_switch
   {
     CASE_TO_F(f, 0);
     CASE_TO_F(f, 1);
+    CASE_TO_F(f, 2);
   }
 
 #if CONFIG_USE_TICK
@@ -526,10 +554,15 @@ int main(int ac, char** av)
   {
 #if !CONFIG_DO_CHECK
     if (tmp != NULL)
+    {
 #endif
       mul_switch(0, tmp, lhs, rhs);
+      mul_switch(1, tmp, lhs, rhs);
+#if !CONFIG_DO_CHECK
+    }
+#endif
 
-    mul_switch(1, res, lhs, rhs);
+    mul_switch(2, res, lhs, rhs);
 
 #if CONFIG_DO_CHECK
     if (matrix_cmp(tmp, res))
