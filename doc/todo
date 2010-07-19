@@ -1,9 +1,13 @@
-. bignum library
-. find big matrices to test
-. adjust grains
-. split per block
+. mesurer temps de loading du fichier
+. changer ticks en temps
 
-. use muladd in matrix multiplication
+. // reading of A + processing
+. gpu operations
+. line_t to avoid overflow
+. better range handling
+. adjust grains
+ -> according to matrix size, currently set to 4
+. use mpn low level functions
 
 . matrix.c
  . line should not be reallocated each time
@@ -13,3 +17,5 @@
  . use ktr to allocate data and kaapi_preeemptpoint
  no longer recopies data, as for kastl_loop
  . or make ktr points on the stack directly, but doesnot remove last copy
+
+. if matrix is too big, divide it and distribute?

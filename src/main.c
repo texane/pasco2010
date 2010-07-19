@@ -23,7 +23,7 @@
 
 #define CONFIG_ITER_COUNT 4
 
-#define CONFIG_DO_CHECK 1
+#define CONFIG_DO_CHECK 0
 
 
 #if CONFIG_USE_TICK
@@ -271,6 +271,7 @@ static int split_function
     return 0;
 
 #if CONFIG_USE_DEBUG
+  printf("unit_size == %lu, %d\n", unit_size, request_count);
   printf("steal_size %lu\n", steal_size);
 #endif
 
@@ -401,6 +402,15 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
   kaapi_steal_finalize(sc);
 }
 
+#if CONFIG_USE_WORKLOAD
+static inline void __attribute__((unused)) wait_a_bit(void)
+{
+  volatile unsigned int i;
+  for (i = 0; i < 10000; ++i)
+    ;
+}
+#endif
+
 static void mul_matrix1
 (matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
@@ -416,6 +426,7 @@ static void mul_matrix1
   /* create and run main task */
 #if CONFIG_USE_WORKLOAD
   kaapi_set_self_workload(get_range_size(&par_work.range));
+  wait_a_bit();
 #endif
   thread = kaapi_self_thread();
   kaapi_thread_save_frame(thread, &frame);
