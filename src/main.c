@@ -2,7 +2,7 @@
 ** Made by fabien le mentec <texane@gmail.com>
 ** 
 ** Started on  Sat Jul 10 09:21:21 2010 texane
-** Last update Mon Jul 12 04:04:00 2010 fabien le mentec
+** Last update Sun Jul 18 14:48:54 2010 texane
 */
 
 
@@ -21,9 +21,9 @@
 
 #define CONFIG_PRINT_RES 0
 
-#define CONFIG_ITER_COUNT 1
+#define CONFIG_ITER_COUNT 4
 
-#define CONFIG_DO_CHECK 0
+#define CONFIG_DO_CHECK 1
 
 
 #if CONFIG_USE_TICK
@@ -367,11 +367,13 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
       matrix_elem_t* const e = matrix_at(seq_work.res, i, j);
       matrix_elem_init(*e);
 
-      for (k = 0; k < seq_work.lhs->size2; ++k)
+      /* l, r */
+      const matrix_elem_t* l = matrix_const_at(seq_work.lhs, i, 0);
+      const matrix_elem_t* r = matrix_const_at(seq_work.rhs, 0, j);
+
+      for (k = 0; k < seq_work.lhs->size2; ++k, ++l, r += seq_work.rhs->size2)
       {
 	/* e += l * r; */
-	const matrix_elem_t* const l = matrix_const_at(seq_work.lhs, i, k);
-	const matrix_elem_t* const r = matrix_const_at(seq_work.rhs, k, j);
 	matrix_elem_addmul(*e, *l, *r);
       }
     }
