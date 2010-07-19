@@ -84,7 +84,6 @@ int matrix_load_file(matrix_t**, const char*);
 int matrix_store_file(const matrix_t*, const char*);
 void matrix_print(const matrix_t*);
 int matrix_create(matrix_t**, size_t, size_t);
-void matrix_gen_rand(matrix_t*);
 void matrix_destroy(matrix_t*);
 int matrix_cmp(const matrix_t*, const matrix_t*);
 
