@@ -496,7 +496,7 @@ static void mul_switch
 
 #if CONFIG_USE_TICK
   tick_sub(&ticks[2], &ticks[1], &ticks[0]);
-  printf("ticks: %lu\n", ticks[2].value);
+  printf("ticks: %lu %lf\n", ticks[2].value, tick_to_usec(&ticks[2]));
 #endif
 
 #if CONFIG_PRINT_RES
@@ -519,6 +519,10 @@ int main(int ac, char** av)
 
   if (ac < 4)
     goto on_error;
+
+#if CONFIG_USE_TICK
+  tick_init();
+#endif
 
   if (matrix_load_file(&lhs, av[1]) == -1)
     goto on_error;
