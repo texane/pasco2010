@@ -1,20 +1,14 @@
-. mesurer temps de loading du fichier
-. changer ticks en temps
+. file loading
+ . use mpn_set_str / get_str
+  . preallocate in the dest file an call get_str(dest_buf)
 
 . // reading of A + processing
 . gpu operations
-. line_t to avoid overflow
 . better range handling
-. adjust grains
- -> according to matrix size, currently set to 4
 . use mpn low level functions
 
-. matrix.c
- . line should not be reallocated each time
- . check write return vals
-
-. optims
- . use ktr to allocate data and kaapi_preeemptpoint
+. kaapi optims
+ . use ktr to allocate data and kaapi_preemptpoint
  no longer recopies data, as for kastl_loop
  . or make ktr points on the stack directly, but doesnot remove last copy
 

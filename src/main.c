@@ -12,9 +12,10 @@
 #include "matrix.h"
 
 
-#define CONFIG_USE_TICK 1
 #define CONFIG_USE_WORKLOAD 1
 #define CONFIG_USE_DEBUG 0
+
+#define CONFIG_DO_TIMES 1
 
 #define CONFIG_PAR_SIZE 1
 #define CONFIG_SEQ_SIZE 1
@@ -23,12 +24,9 @@
 
 #define CONFIG_ITER_COUNT 4
 
-#define CONFIG_DO_CHECK 0
+#define CONFIG_DO_CHECK 1
 
-
-#if CONFIG_USE_TICK
-#include "tick.h"
-#endif
+#define CONFIG_DO_DEALLOC 0
 
 
 #if CONFIG_USE_WORKLOAD
@@ -42,6 +40,17 @@ extern unsigned int kaapi_request_kid(kaapi_request_t*);
 
 #if CONFIG_USE_DEBUG
 extern unsigned int kaapi_get_current_kid(void);
+#endif
+
+
+#if CONFIG_DO_TIMES
+#include <sys/time.h>
+static inline double get_elapsed_time(void)
+{
+  struct timeval tv;
+  if (gettimeofday(&tv, 0)) return 0;
+  return (double)tv.tv_sec + 1e-6*(double)tv.tv_usec;
+}
 #endif
 
 
@@ -466,15 +475,15 @@ static void __attribute__((unused)) print_matrix(const gsl_matrix* m)
 #endif
 
 
-/* select the implementation to run */
+/* select and time the implementation to run */
 
 static void mul_switch
 (unsigned int n, matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
   static void (*f)(matrix_t*, const matrix_t*, const matrix_t*) = NULL;
 
-#if CONFIG_USE_TICK
-  tick_counter_t ticks[3];
+#if CONFIG_DO_TIMES
+  double times[2];
 #endif
 
 #define CASE_TO_F(__f, __n) case __n: __f = mul_matrix ## __n; break
@@ -484,19 +493,15 @@ static void mul_switch
     CASE_TO_F(f, 1);
   }
 
-#if CONFIG_USE_TICK
-  tick_read(&ticks[0]);
+#if CONFIG_DO_TIMES
+  times[0] = get_elapsed_time();
 #endif
 
   f(res, lhs, rhs);
 
-#if CONFIG_USE_TICK
-  tick_read(&ticks[1]);
-#endif
-
-#if CONFIG_USE_TICK
-  tick_sub(&ticks[2], &ticks[1], &ticks[0]);
-  printf("ticks: %lu %lf\n", ticks[2].value, tick_to_usec(&ticks[2]));
+#if CONFIG_DO_TIMES
+  times[1] = get_elapsed_time();
+  printf("time: %lf\n", times[1] - times[0]);
 #endif
 
 #if CONFIG_PRINT_RES
@@ -519,10 +524,6 @@ int main(int ac, char** av)
 
   if (ac < 4)
     goto on_error;
-
-#if CONFIG_USE_TICK
-  tick_init();
-#endif
 
   if (matrix_load_file(&lhs, av[1]) == -1)
     goto on_error;
@@ -563,6 +564,7 @@ int main(int ac, char** av)
 
  on_error:
 
+#if CONFIG_DO_DEALLOC
   if (res != NULL)
     matrix_destroy(res);
   if (tmp != NULL)
@@ -571,6 +573,7 @@ int main(int ac, char** av)
     matrix_destroy(lhs);
   if (rhs != NULL)
     matrix_destroy(rhs);
+#endif
 
   return 0;
 }
