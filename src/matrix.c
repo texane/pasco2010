@@ -186,17 +186,24 @@ static int read_line(mapped_file_t* mf, line_t* line)
 
 static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
 {
-  const size_t data_size = (size1 * size2 * sizeof(matrix_elem_t));
-  const size_t total_size = offsetof(matrix_t, data) + data_size;
-
-  matrix_t* const m = malloc(total_size);
+  matrix_t* const m = malloc(sizeof(matrix_t));
   if (m == NULL)
-    return NULL;
+    goto on_error;
+
+  m->data = malloc(size1 * size2 * sizeof(matrix_elem_t));
+  if (m->data == NULL)
+    goto on_error;
 
   m->size1 = size1;
   m->size2 = size2;
+  m->ld = size2;
 
   return m;
+
+ on_error:
+  if (m != NULL)
+    free(m);
+  return NULL;
 }
 
 
@@ -273,10 +280,10 @@ int matrix_store_file(const matrix_t* m, const char* path)
       const matrix_elem_t* const elem = matrix_const_at(m, i, j);
 
       /* realloc if needed */
-      const size_t numlen = mpz_sizeinbase(*elem, 10);
-      if (numlen >= line.len)
+      len = matrix_elem_strlen(*elem);
+      if (len >= line.len)
       {
-	if (line_realloc(&line, (numlen + 2)) == -1)
+	if (line_realloc(&line, len) == -1)
 	  goto on_error;
       }
 
@@ -331,6 +338,7 @@ void matrix_destroy(matrix_t* m)
     }
   }
 
+  free(m->data);
   free(m);
 }
 

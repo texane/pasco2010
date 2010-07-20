@@ -16,6 +16,8 @@
 
 /* matrix element wrappers */
 
+#if 0 /* CONFIG_USE_MPZ */
+
 typedef mpz_t matrix_elem_t;
 
 static inline void matrix_elem_init(matrix_elem_t elem)
@@ -54,7 +56,6 @@ static inline void matrix_elem_add
   mpz_add(res, res, op);
 }
 
-
 static inline void matrix_elem_addmul
 (matrix_elem_t res, const matrix_elem_t lhs, const matrix_elem_t rhs)
 {
@@ -68,14 +69,82 @@ static inline int matrix_elem_cmp
   return mpz_cmp(lhs, rhs);
 }
 
+static inline size_t matrix_elem_strlen(const matrix_elem_t e)
+{
+  return mpz_sizeinbase(elem, 10) + 2;
+}
+
+#else /* CONFIG_USE_MPQ */
+
+
+typedef mpq_t matrix_elem_t;
+
+static inline void matrix_elem_init(matrix_elem_t elem)
+{
+  /* set value to 0 */
+  mpq_init(elem);
+}
+
+static inline void matrix_elem_clear(matrix_elem_t elem)
+{
+  mpq_clear(elem);
+}
+
+static inline int matrix_elem_set_str
+(matrix_elem_t elem, const char* s)
+{
+  mpq_init(elem);
+  return mpq_set_str(elem, s, 10);
+}
+
+static inline char* matrix_elem_get_str
+(const matrix_elem_t elem, char* s)
+{
+  return mpz_get_str(s, 10, mpq_numref(elem));
+}
+
+static inline void matrix_elem_mul
+(matrix_elem_t res, const matrix_elem_t lhs, const matrix_elem_t rhs)
+{
+  mpz_mul(mpq_numref(res), mpq_numref(lhs), mpq_numref(rhs));
+}
+
+static inline void matrix_elem_add
+(matrix_elem_t res, const matrix_elem_t op)
+{
+  /* res *= op */
+  mpz_add(mpq_numref(res), mpq_numref(res), mpq_numref(op));
+}
+
+static inline void matrix_elem_addmul
+(matrix_elem_t res, const matrix_elem_t lhs, const matrix_elem_t rhs)
+{
+  /* res += lhs * rhs; */
+  mpz_addmul(mpq_numref(res), mpq_numref(lhs), mpq_numref(rhs));
+}
+
+static inline int matrix_elem_cmp
+(const matrix_elem_t lhs, const matrix_elem_t rhs)
+{
+  return mpz_cmp(mpq_numref(lhs), mpq_numref(rhs));
+}
+
+static inline size_t matrix_elem_strlen(const matrix_elem_t e)
+{
+  return mpz_sizeinbase(mpq_numref(e), 10) + 2;
+}
+
+#endif
+
 
 /* matrix storage */
 
 typedef struct matrix
 {
+  size_t ld;
   size_t size1;
   size_t size2;
-  matrix_elem_t data[1] __attribute__((aligned(64)));
+  matrix_elem_t* data;
 } matrix_t;
 
 
@@ -90,13 +159,13 @@ int matrix_cmp(const matrix_t*, const matrix_t*);
 /* exported inlined */
 static inline matrix_elem_t* matrix_at(matrix_t* m, size_t i, size_t j)
 {
-  return &m->data[i * m->size2 + j];
+  return m->data + i * m->ld + j;
 }
 
 static inline const matrix_elem_t* matrix_const_at
 (const matrix_t* m, size_t i, size_t j)
 {
-  return &m->data[i * m->size2 + j];
+  return (const matrix_elem_t*)(m->data + i * m->ld + j);
 }
 
 

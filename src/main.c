@@ -125,18 +125,17 @@ static inline unsigned int get_range_size(const range_t* range)
 }
 
 
-static inline void res_to_range(matrix_t* res, range_t* range)
+static inline void dim_to_range(matrix_t* res, range_t* range)
 {
   range->i = 0;
   range->j = res->size1 * res->size2;
 }
 
 
-static inline void index_to_res
+static inline void index_to_dim
 (const matrix_t* res, size_t index, size_t* i, size_t* j)
 {
   /* flat index into res ij pos */
-
   *i = index / res->size2;
   *j = index % res->size2;
 }
@@ -150,8 +149,8 @@ static void range_to_res
 {
   /* flat range into res ij pos */
 
-  index_to_res(res, range->i, imin, jmin);
-  index_to_res(res, range->j, imax, jmax);
+  index_to_dim(res, range->i, imin, jmin);
+  index_to_dim(res, range->j, imax, jmax);
 }
 #endif /* unused */
 
@@ -371,18 +370,18 @@ static void task_entry(void* arg, kaapi_thread_t* thread)
     {
       size_t i, j, k;
 
-      index_to_res(seq_work.res, n, &i, &j);
+      index_to_dim(seq_work.res, n, &i, &j);
 
       /* e = 0; */
       matrix_elem_t* const e = matrix_at(seq_work.res, i, j);
       matrix_elem_init(*e);
 
-      /* l, r */
-      const matrix_elem_t* l = matrix_const_at(seq_work.lhs, i, 0);
-      const matrix_elem_t* r = matrix_const_at(seq_work.rhs, 0, j);
-
-      for (k = 0; k < seq_work.lhs->size2; ++k, ++l, r += seq_work.rhs->size2)
+      for (k = 0; k < seq_work.lhs->size2; ++k)
       {
+	/* l, r */
+	const matrix_elem_t* l = matrix_const_at(seq_work.lhs, i, k);
+	const matrix_elem_t* r = matrix_const_at(seq_work.rhs, k, j);
+
 	/* e += l * r; */
 	matrix_elem_addmul(*e, *l, *r);
       }
@@ -429,7 +428,7 @@ static void mul_matrix1
   kaapi_frame_t frame;
 
   range_t range;
-  res_to_range(res, &range);
+  dim_to_range(res, &range);
   prepare_par_work(&par_work, res, lhs, rhs, &range, NULL, NULL);
 
   /* create and run main task */
@@ -447,6 +446,24 @@ static void mul_matrix1
 #if CONFIG_USE_WORKLOAD
   kaapi_set_self_workload(0);
 #endif
+}
+
+static void __attribute__((unused)) matrix_mul_from_linbox
+(
+ size_t m, size_t n, size_t k,
+ matrix_elem_t* a, const size_t lda,
+ matrix_elem_t* b, const size_t ldb,
+ matrix_elem_t* c, const size_t ldc
+)
+{
+#define MATRIX_INIT(__ld, __size1, __size2, __data) \
+  { __ld, __size1, __size2, __data }
+
+  matrix_t res = MATRIX_INIT(ldc, m, n, c);
+  matrix_t lhs = MATRIX_INIT(lda, m, k, a);
+  matrix_t rhs = MATRIX_INIT(ldb, k, n, b);
+
+  mul_matrix1(&res, &lhs, &rhs);
 }
 
 
