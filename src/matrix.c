@@ -48,7 +48,7 @@ static int line_realloc(line_t* line, size_t len)
   }
   else if (line->is_allocated == 0)
   {
-    char* const data = malloc(len);
+    char* const data = (char*)malloc(len);
     if (data == NULL)
       return -1;
 
@@ -59,7 +59,7 @@ static int line_realloc(line_t* line, size_t len)
   }
   else /* line->is_allocated */
   {
-    line->data = realloc(line->data, len);
+    line->data = (char*)realloc(line->data, len);
     if (line->data == NULL)
       return -1;
     line->len = len;
@@ -106,7 +106,7 @@ static int map_file(mapped_file_t* mf, const char* path)
   if (fstat(fd, &st) == -1)
     goto on_error;
 
-  mf->base = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  mf->base = (unsigned char*)mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
   if (mf->base == MAP_FAILED)
     goto on_error;
 
@@ -124,8 +124,8 @@ static int map_file(mapped_file_t* mf, const char* path)
 
 static void unmap_file(mapped_file_t* mf)
 {
-  munmap(mf->base, mf->len);
-  mf->base = MAP_FAILED;
+  munmap((void*)mf->base, mf->len);
+  mf->base = (unsigned char*)MAP_FAILED;
   mf->len = 0;
 }
 
@@ -186,11 +186,11 @@ static int read_line(mapped_file_t* mf, line_t* line)
 
 static inline matrix_t* allocate_matrix(size_t size1, size_t size2)
 {
-  matrix_t* const m = malloc(sizeof(matrix_t));
+  matrix_t* const m = (matrix_t*)malloc(sizeof(matrix_t));
   if (m == NULL)
     goto on_error;
 
-  m->data = malloc(size1 * size2 * sizeof(matrix_elem_t));
+  m->data = (matrix_elem_t*)malloc(size1 * size2 * sizeof(matrix_elem_t));
   if (m->data == NULL)
     goto on_error;
 
