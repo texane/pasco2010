@@ -8,4 +8,5 @@ gcc -std=c99 -Wall -O3 -march=native \
     ../src/main.c ../src/matrix.c \
     ../src/mul_matrix_0.c \
     ../src/mul_matrix_1.c \
+    ../src/innerprod.c \
     -L$XKAAPIDIR/lib -lxkaapi -lpthread -L$GMPDIR/lib -lgmp

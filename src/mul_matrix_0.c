@@ -3,9 +3,18 @@
 
 /* sequential handwritten version */
 
+extern void innerprod
+(
+ matrix_elem_t res,
+ const matrix_t* a,
+ const size_t ai,
+ const matrix_t* b,
+ const size_t bj
+);
+
 void mul_matrix_0(matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
 {
-  size_t i, j, k;
+  size_t i, j;
 
   for (i = 0; i < lhs->size1; ++i)
   {
@@ -15,13 +24,17 @@ void mul_matrix_0(matrix_t* res, const matrix_t* lhs, const matrix_t* rhs)
       matrix_elem_t* const e = matrix_at(res, i, j);
       matrix_elem_init(*e);
 
-      for (k = 0; k < rhs->size1; ++k)
+#if 0
+      for (size_t k = 0; k < rhs->size1; ++k)
       {
 	/* e += l * r; */
 	const matrix_elem_t* const l = matrix_const_at(lhs, i, k);
 	const matrix_elem_t* const r = matrix_const_at(rhs, k, j);
 	matrix_elem_addmul(*e, *l, *r);
       }
+#else
+      innerprod(*e, lhs, i, rhs, j);
+#endif
     }
   }
 }

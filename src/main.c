@@ -14,7 +14,7 @@
 #define CONFIG_DO_TIMES 1
 #define CONFIG_PRINT_RES 0
 #define CONFIG_ITER_COUNT 4
-#define CONFIG_DO_CHECK 1
+#define CONFIG_DO_CHECK 0
 #define CONFIG_DO_DEALLOC 0
 
 
@@ -129,7 +129,7 @@ int main(int ac, char** av)
 #endif
       mul_switch(0, tmp, lhs, rhs);
 
-    mul_switch(1, res, lhs, rhs);
+    mul_switch(0, res, lhs, rhs);
 
 #if CONFIG_DO_CHECK
     if (matrix_cmp(tmp, res))

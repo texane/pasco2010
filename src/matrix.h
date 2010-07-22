@@ -11,19 +11,24 @@
 
 
 #include <sys/types.h>
-/* #include "gmp.h" */
 
 
 /* matrix element wrappers */
 
-#if 0 /* CONFIG_USE_MPZ */
+#if 1 /* CONFIG_USE_MPZ */
 
+#include "gmp.h"
 typedef mpz_t matrix_elem_t;
 
 static inline void matrix_elem_init(matrix_elem_t elem)
 {
   /* set value to 0 */
   mpz_init(elem);
+}
+
+static inline void matrix_elem_set(matrix_elem_t a, matrix_elem_t b)
+{
+  mpz_set(a, b);
 }
 
 static inline void matrix_elem_clear(matrix_elem_t elem)
@@ -52,7 +57,7 @@ static inline void matrix_elem_mul
 static inline void matrix_elem_add
 (matrix_elem_t res, const matrix_elem_t op)
 {
-  /* res *= op */
+  /* res += op */
   mpz_add(res, res, op);
 }
 
@@ -71,7 +76,7 @@ static inline int matrix_elem_cmp
 
 static inline size_t matrix_elem_strlen(const matrix_elem_t e)
 {
-  return mpz_sizeinbase(elem, 10) + 2;
+  return mpz_sizeinbase(e, 10) + 2;
 }
 
 #elif 0 /* CONFIG_USE_MPQ */
@@ -203,7 +208,7 @@ static inline size_t matrix_elem_strlen(const matrix_elem_t& e)
   return mpz_sizeinbase(mpq_numref(_e.get_rep()), 10) + 2;
 }
 
-#elif 1 /* linbox::integer */
+#elif 0 /* linbox::integer */
 
 #include "linbox/linbox-config.h"
 #include "linbox/integer.h"
