@@ -11,7 +11,7 @@
 
 
 #include <sys/types.h>
-#include "gmp.h"
+/* #include "gmp.h" */
 
 
 /* matrix element wrappers */
@@ -74,8 +74,7 @@ static inline size_t matrix_elem_strlen(const matrix_elem_t e)
   return mpz_sizeinbase(elem, 10) + 2;
 }
 
-#else /* CONFIG_USE_MPQ */
-
+#elif 0 /* CONFIG_USE_MPQ */
 
 typedef mpq_t matrix_elem_t;
 
@@ -134,6 +133,141 @@ static inline size_t matrix_elem_strlen(const matrix_elem_t e)
   return mpz_sizeinbase(mpq_numref(e), 10) + 2;
 }
 
+#elif 0 /* linbox::GMPRationalElement */
+
+#include "linbox/linbox-config.h"
+#include "linbox/element/gmp-rational.h"
+
+typedef LinBox::GMPRationalElement matrix_elem_t;
+
+static inline void matrix_elem_init(matrix_elem_t& elem)
+{
+  /* set value to 0 */
+  mpq_init(elem.get_rep());
+}
+
+static inline void matrix_elem_clear(matrix_elem_t& elem)
+{
+  mpq_clear(elem.get_rep());
+}
+
+static inline int matrix_elem_set_str(matrix_elem_t& elem, const char* s)
+{
+  mpq_init(elem.get_rep());
+  return mpq_set_str(elem.get_rep(), s, 10);
+}
+
+static inline char* matrix_elem_get_str
+(const matrix_elem_t& e, char* s)
+{
+  matrix_elem_t& _e = (matrix_elem_t&)e;
+  return mpz_get_str(s, 10, mpq_numref(_e.get_rep()));
+}
+
+static inline void matrix_elem_mul
+(matrix_elem_t& res, const matrix_elem_t& lhs, const matrix_elem_t& rhs)
+{
+  matrix_elem_t& _lhs = (matrix_elem_t&)lhs;
+  matrix_elem_t& _rhs = (matrix_elem_t&)rhs;
+  mpz_mul(mpq_numref(res.get_rep()), mpq_numref(_lhs.get_rep()), mpq_numref(_rhs.get_rep()));
+}
+
+static inline void matrix_elem_add
+(matrix_elem_t& res, const matrix_elem_t& op)
+{
+  /* res *= op */
+  matrix_elem_t& _op = (matrix_elem_t&)op;
+  mpz_add(mpq_numref(res.get_rep()), mpq_numref(res.get_rep()), mpq_numref(_op.get_rep()));
+}
+
+static inline void matrix_elem_addmul
+(matrix_elem_t& res, const matrix_elem_t& lhs, const matrix_elem_t& rhs)
+{
+  /* res += lhs * rhs; */
+  matrix_elem_t& _lhs = (matrix_elem_t&)lhs;
+  matrix_elem_t& _rhs = (matrix_elem_t&)rhs;
+  mpz_addmul(mpq_numref(res.get_rep()), mpq_numref(_lhs.get_rep()), mpq_numref(_rhs.get_rep()));
+}
+
+static inline int matrix_elem_cmp
+(const matrix_elem_t& lhs, const matrix_elem_t& rhs)
+{
+  matrix_elem_t& _lhs = (matrix_elem_t&)lhs;
+  matrix_elem_t& _rhs = (matrix_elem_t&)rhs;
+  return mpz_cmp(mpq_numref(_lhs.get_rep()), mpq_numref(_rhs.get_rep()));
+}
+
+static inline size_t matrix_elem_strlen(const matrix_elem_t& e)
+{
+  matrix_elem_t& _e = (matrix_elem_t&)e;
+  return mpz_sizeinbase(mpq_numref(_e.get_rep()), 10) + 2;
+}
+
+#elif 1 /* linbox::integer */
+
+#include "linbox/linbox-config.h"
+#include "linbox/integer.h"
+
+typedef LinBox::integer matrix_elem_t;
+typedef matrix_elem_t* MatrixPtr;
+
+static inline void matrix_elem_init(matrix_elem_t& elem)
+{
+  /* set value to 0 */
+  mpz_init(elem.get_mpz());
+}
+
+static inline void matrix_elem_clear(matrix_elem_t& elem)
+{
+  mpz_clear(elem.get_mpz());
+}
+
+static inline int matrix_elem_set_str(matrix_elem_t& elem, const char* s)
+{
+  return mpz_init_set_str(elem.get_mpz(), s, 10);
+}
+
+static inline char* matrix_elem_get_str(const matrix_elem_t& elem, char* s)
+{
+  return mpz_get_str(s, 10, ((matrix_elem_t&)elem).get_mpz());
+}
+
+static inline void matrix_elem_mul
+(matrix_elem_t& res, const matrix_elem_t& lhs, const matrix_elem_t& rhs)
+{
+  mpz_mul(res.get_mpz(), ((matrix_elem_t&)lhs).get_mpz(), ((matrix_elem_t&)rhs).get_mpz());
+}
+
+static inline void matrix_elem_add
+(matrix_elem_t& res, const matrix_elem_t& op)
+{
+  /* res *= op */
+  mpz_add(res.get_mpz(), res.get_mpz(), ((matrix_elem_t&)op).get_mpz());
+}
+
+static inline void matrix_elem_addmul
+(matrix_elem_t& res, const matrix_elem_t& lhs, const matrix_elem_t& rhs)
+{
+  /* res += lhs * rhs; */
+  mpz_addmul(res.get_mpz(), ((matrix_elem_t&)lhs).get_mpz(), ((matrix_elem_t&)rhs).get_mpz());
+}
+
+static inline int matrix_elem_cmp
+(const matrix_elem_t& lhs, const matrix_elem_t& rhs)
+{
+  return mpz_cmp(((matrix_elem_t&)lhs).get_mpz(), ((matrix_elem_t&)rhs).get_mpz());
+}
+
+static inline size_t matrix_elem_strlen(const matrix_elem_t& e)
+{
+  return mpz_sizeinbase(((matrix_elem_t&)e).get_mpz(), 10) + 2;
+}
+
+static inline unsigned int matrix_elem_is_zero(const matrix_elem_t& e)
+{
+  return mpz_get_ui(((matrix_elem_t&)e).get_mpz()) == 0;
+}
+
 #endif
 
 
@@ -153,6 +287,7 @@ int matrix_load_file(matrix_t**, const char*);
 int matrix_store_file(const matrix_t*, const char*);
 void matrix_print(const matrix_t*);
 int matrix_create(matrix_t**, size_t, size_t);
+void matrix_init(matrix_t*);
 void matrix_destroy(matrix_t*);
 int matrix_cmp(const matrix_t*, const matrix_t*);
 

@@ -325,6 +325,14 @@ int matrix_create(matrix_t** m, size_t size1, size_t size2)
   return 0;
 }
 
+void matrix_init(matrix_t* m)
+{
+  size_t i, j;
+  for (i = 0; i < m->size1; ++i)
+    for (j = 0; j < m->size2; ++j)
+      matrix_elem_init(*matrix_at(m, i, j));
+}
+
 void matrix_destroy(matrix_t* m)
 {
   size_t i, j;
